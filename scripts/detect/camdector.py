@@ -178,44 +178,52 @@ class Detector(object):
         for i in range(dets.shape[0]):
             cls_id = int(dets[i, 0])
             # if cls_id >= 0:
-            if trackpos == 0:
-                trackpos =  int(0.5*(xmax-xmin))
-                
+            
+            acc_flag = 0
             if cls_id == 14:
                 score = dets[i, 1]
                 if score > thresh:
                     if cls_id not in colors:
                         colors[cls_id] = (self.randomRGB(), self.randomRGB(), self.randomRGB())
-                    xmin = int(dets[i, 2] * width)
-                    ymin = int(dets[i, 3] * height)
-                    xmax = int(dets[i, 4] * width)
-                    ymax = int(dets[i, 5] * height)
-                    img_roi = img_depth[ymin:ymax,xmin:xmax]
-                    temp_height = img_roi.shape[0] 
-                    temp_width = img_roi.shape[1]
-                    # print("high:{} width:{} ".format(height, width ))
-                    # print("xmin:{} xmax:{} ymin:{} ymax:{}".format(xmin, xmax, ymin, ymax))
-                    biggest = np.amin(img_roi)
-                    required = (img_roi[int(0.5*(ymax-ymin)),int(0.5*(xmax-xmin))])
-                    # global TAZ_RECT
+                    if trackpos == 0:
+                        trackpos =  int(0.5*(int(dets[i, 4] * width)-int(dets[i, 2] * width)))
+                    if abs(trackpos - int(0.5*(int(dets[i, 4] * width)-int(dets[i, 2] * width)))) < 30:
+                        xmin = int(dets[i, 2] * width)
+                        ymin = int(dets[i, 3] * height)
+                        xmax = int(dets[i, 4] * width)
+                        ymax = int(dets[i, 5] * height)
+                        img_roi = img_depth[ymin:ymax,xmin:xmax]
+                        temp_height = img_roi.shape[0] 
+                        temp_width = img_roi.shape[1]
+                        # print("high:{} width:{} ".format(height, width ))
+                        # print("xmin:{} xmax:{} ymin:{} ymax:{}".format(xmin, xmax, ymin, ymax))
+                        biggest = np.amin(img_roi)
+                        required = (img_roi[int(0.5*(ymax-ymin)),int(0.5*(xmax-xmin))])
+                        # global TAZ_RECT
+                        trackpos = int(0.5*(xmax-xmin))
+                        acc_flag = 1
 
-                    global tracker
-                    TAZ_RECT = pv.Rect(xmin, ymax, xmax-xmin, ymax-ymin)
-                    uFrame = pv.Image(img.copy())
-                    tracker = ocof.MOSSETrack(uFrame,TAZ_RECT)
 
-                    cv2.rectangle(
-                        img, (xmin, ymin), (xmax, ymax), color=colors[cls_id])
-                    class_name = str(cls_id)
-                    if classes and len(classes) > cls_id:
-                        class_name = classes[cls_id]
-                    # text = '{:s} {:.2f} {:.2f}'.format(class_name, score, required)
-                    text = '{:s} {:.2f}m'.format(class_name, required)
-                    texSize, baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_DUPLEX, 1, 1)
-                    cv2.rectangle(
-                        img, (xmin, ymin - 2), (xmin + texSize[0], ymin - texSize[1]), colors[cls_id], -1)
-                    cv2.putText(img, text,
-                                (xmin, ymin - 2), cv2. FONT_HERSHEY_DUPLEX, 1, self.colorInv(colors[cls_id]), 1)
+                        global tracker
+                        TAZ_RECT = pv.Rect(xmin, ymax, xmax-xmin, ymax-ymin)
+                        uFrame = pv.Image(img.copy())
+                        tracker = ocof.MOSSETrack(uFrame,TAZ_RECT)
+
+                        global acc_pub
+                        # acc_pub.publish(hello_str)
+
+                        cv2.rectangle(
+                            img, (xmin, ymin), (xmax, ymax), color=colors[cls_id])
+                        class_name = str(cls_id)
+                        if classes and len(classes) > cls_id:
+                            class_name = classes[cls_id]
+                        # text = '{:s} {:.2f} {:.2f}'.format(class_name, score, required)
+                        text = '{:s} {:.2f}m'.format(class_name, required)
+                        texSize, baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_DUPLEX, 1, 1)
+                        cv2.rectangle(
+                            img, (xmin, ymin - 2), (xmin + texSize[0], ymin - texSize[1]), colors[cls_id], -1)
+                        cv2.putText(img, text,
+                                    (xmin, ymin - 2), cv2. FONT_HERSHEY_DUPLEX, 1, self.colorInv(colors[cls_id]), 1)
 
         # cv2.namedWindow("stra")
         cv2.imshow("stra",img)
@@ -255,6 +263,8 @@ class Detector(object):
         global img_raw
         global tracker
         global show
+        global imshow
+
         if tracker is None:
             print("track none")
         # if TrackFlag is True:
@@ -268,8 +278,8 @@ class Detector(object):
             # print("shape:{}".format(rect))
             show = uframe.asOpenCV()
             # print("{}".format(show.shape))
-            # cv2.rectangle(show, ((int)(rect.x),(int)(rect.y)), ((int)(rect.x+rect.w),(int)(rect.y+rect.h)), (255,0,0),2)
             cv2.rectangle(show, ((int)(rect.x),(int)(rect.y-rect.h)), ((int)(rect.x+rect.w), (int)(rect.y)), (255,0,0),2)
+            imshow = 1
             # cv2.imshow("tester", show)
             # print("track arrive")
             # cv2.waitKey()
@@ -277,6 +287,15 @@ class Detector(object):
     def detect_and_visualize(self, root_dir=None, extension=None,
                              classes=[], thresh=0.6, show_timer=False):
         
+        global imgi
+        global img_rect
+        global Frame
+        global show
+        global trackpos
+        global imshow
+        global acc_pub
+
+        # acc_pub = rospy.Publisher("acc_cmd", String, queue_size=2)
         # rospy.Timer(rospy.Duration(0.02), self.trackCallback)
         rospy.Subscriber("/zed/left/image_rect_color/compressed",CompressedImage, self.ImgCcallback,  queue_size = 4)
         # rospy.Subscriber("/zed/left/image_rect_color",Image, self.Imgcallback,  queue_size = 4)
@@ -285,13 +304,8 @@ class Detector(object):
         with open(im_path, 'rb') as fp:
             img_content = fp.read()
 
-        global imgi
-        global img_rect
-        global Frame
-        global show
-        global trackpos
-
         trackpos = 0
+        imshow = 0
         imgi = mx.img.imdecode(img_content)
         while(1):
             
@@ -305,7 +319,10 @@ class Detector(object):
             # img[:, :, (0, 1, 2)] = img[:, :, (2, 1, 0)]
             # img = img_rect.copy()
             self.visualize_detection(img_rect, dets[0], classes, thresh)
-            # cv2.imshow("tester", show)
+
+            if imshow == 1:
+                cv2.imshow("tester", show)
+
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         cap.release()
