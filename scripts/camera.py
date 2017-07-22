@@ -38,7 +38,7 @@ if __name__ == '__main__':
     # print("The path2: {} ".format(sys.path[0]))
     epoch = 0
     data_shape = 300
-    mean_r = 123
+    mean_r = 125
     mean_g = 117
     mean_b = 104
     nms_thresh = 0.5

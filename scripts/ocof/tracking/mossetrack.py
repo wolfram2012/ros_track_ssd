@@ -581,7 +581,7 @@ class MOSSETrack:
                                 
         stop = time.time()
         self.update_time = stop - start
-            
+           
                 
     def asPoint(self):
         '''

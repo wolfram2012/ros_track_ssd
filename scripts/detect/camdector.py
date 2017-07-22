@@ -8,6 +8,8 @@ from tools.rand_sampler import RandSampler
 import rospy
 from sensor_msgs.msg import CompressedImage
 from sensor_msgs.msg import Image
+from std_msgs.msg import Bool
+from coms_msgs.msg import ACCCommand
 from cv_bridge import CvBridge
 
 import numpy as np
@@ -175,19 +177,19 @@ class Detector(object):
         global img_depth
         global trackpos
         # print dets.shape[0]
+        acc_flag = False
         for i in range(dets.shape[0]):
             cls_id = int(dets[i, 0])
             # if cls_id >= 0:
             
-            acc_flag = 0
             if cls_id == 14:
                 score = dets[i, 1]
                 if score > thresh:
                     if cls_id not in colors:
                         colors[cls_id] = (self.randomRGB(), self.randomRGB(), self.randomRGB())
                     if trackpos == 0:
-                        trackpos =  int(0.5*(int(dets[i, 4] * width)-int(dets[i, 2] * width)))
-                    if abs(trackpos - int(0.5*(int(dets[i, 4] * width)-int(dets[i, 2] * width)))) < 30:
+                        trackpos =  int(0.5*(int(dets[i, 4] * width)+int(dets[i, 2] * width)))
+                    if abs(trackpos - (int(0.5*(int(dets[i, 4] * width)+int(dets[i, 2] * width))))) < 30:
                         xmin = int(dets[i, 2] * width)
                         ymin = int(dets[i, 3] * height)
                         xmax = int(dets[i, 4] * width)
@@ -200,9 +202,8 @@ class Detector(object):
                         biggest = np.amin(img_roi)
                         required = (img_roi[int(0.5*(ymax-ymin)),int(0.5*(xmax-xmin))])
                         # global TAZ_RECT
-                        trackpos = int(0.5*(xmax-xmin))
-                        acc_flag = 1
-
+                        trackpos = int(0.5*(xmax+xmin))
+                        acc_flag = True
 
                         global tracker
                         TAZ_RECT = pv.Rect(xmin, ymax, xmax-xmin, ymax-ymin)
@@ -210,7 +211,10 @@ class Detector(object):
                         tracker = ocof.MOSSETrack(uFrame,TAZ_RECT)
 
                         global acc_pub
-                        # acc_pub.publish(hello_str)
+                        accCmd = ACCCommand()
+                        accCmd.logtitudeErr = required
+                        accCmd.lateralErr = trackpos
+                        acc_pub.publish(accCmd)
 
                         cv2.rectangle(
                             img, (xmin, ymin), (xmax, ymax), color=colors[cls_id])
@@ -225,6 +229,7 @@ class Detector(object):
                         cv2.putText(img, text,
                                     (xmin, ymin - 2), cv2. FONT_HERSHEY_DUPLEX, 1, self.colorInv(colors[cls_id]), 1)
 
+        acc_enable.publish(acc_flag)
         # cv2.namedWindow("stra")
         cv2.imshow("stra",img)
         # cv2.waitKey()
@@ -294,8 +299,10 @@ class Detector(object):
         global trackpos
         global imshow
         global acc_pub
+        global acc_enable
 
-        # acc_pub = rospy.Publisher("acc_cmd", String, queue_size=2)
+        acc_pub = rospy.Publisher("acc_cmd", ACCCommand, queue_size=2)
+        acc_enable = rospy.Publisher("acc_enable", Bool, queue_size=2)
         # rospy.Timer(rospy.Duration(0.02), self.trackCallback)
         rospy.Subscriber("/zed/left/image_rect_color/compressed",CompressedImage, self.ImgCcallback,  queue_size = 4)
         # rospy.Subscriber("/zed/left/image_rect_color",Image, self.Imgcallback,  queue_size = 4)
